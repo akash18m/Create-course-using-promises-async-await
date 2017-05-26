@@ -31,6 +31,132 @@ router.get('/lessons',function(req,res,next)
   	});
 });
 
+
+
+router.post('/',function(req,res,next)
+{
+	var cname = req.body.name;
+	var sections = req.body.sections;
+	var c_obj = {
+		name : cname,
+	    position : 1,
+		duration : 0,
+	}
+	var course_id;
+	DB.course.create(c_obj,function (err, data) 
+	{
+    	if (err) return next(err);
+    	course_id = data._id;
+    	add_sections(sections,course_id)
+    	res.json(null);
+  	});
+});
+
+router.post('/addSection',function(req,res,next)
+{
+	var sections = req.body.sections;
+	var course_id = req.body.course_id;
+	
+	add_sections(sections,course_id)
+	res.json(null);
+});
+
+
+router.post('/addLesson',function(req,res,next)
+{
+	var lessons = req.body.lessons;
+	var section_id = req.body.section_id;
+	var course_id;
+	add_lessons(lessons,section_id,0)
+	.then(function(arr){
+		DB.section.findById(section_id,function(err,data){
+			course_id = data.course_id;
+			update_c_duration([arr[0] , course_id])
+		})
+		.catch(err => {
+			console.log(err)
+		});;
+		res.json(null);
+	})
+	.catch(err => {
+		console.log(err)
+	});;
+
+});
+
+router.delete('/delete/:course_id',function(req,res,next)
+{
+	var course_ID = req.params.course_id;
+	DB.section.find({course_id : course_ID},function(err,data){
+		for(i in data){
+			var section_ID = data[i]._id;
+			DB.lesson.remove({section_id : section_ID},function(err,data){
+
+			})
+			DB.section.remove({_id : section_ID},function(err,data){
+
+			})
+		}
+	})
+	.then(function(){
+		DB.course.remove({_id : course_ID},function(err,data){
+		
+		})
+		res.json(null);
+	});
+});
+
+router.delete('/deleteSection/:section_id',function(req,res,next)
+{
+	var section_ID = req.params.section_id;
+	var s_duration = 0;
+	DB.lesson.find({section_id : section_ID},function(err,data){
+		for(i in data){
+			s_duration += data[i].duration;
+			DB.lesson.remove({_id : data[i]._id},function(err,data){
+
+			})
+		}
+	})
+	.then(function(){
+		var course_ID;
+		DB.section.find({_id : section_ID},function(err,data){
+			course_ID = data[0].course_id;
+			DB.section.remove({_id : data[0]._id},function(err,data){
+				update_c_duration([-s_duration , course_ID])
+				res.json(null);
+			})
+		})
+		
+	});
+});
+
+router.delete('/deleteLesson/:lesson_id',function(req,res,next)
+{
+	var lesson_ID = req.params.lesson_id;
+	var section_ID;
+	var duration = 0;
+	DB.lesson.find({_id : lesson_ID},function(err,data){
+		duration = data[0].duration;
+		section_ID = data[0].section_id;
+		DB.lesson.remove({_id : data[0]._id},function(err,data){
+			
+		})
+	})
+	.then(function(){
+		var course_ID;
+		DB.section.find({_id : section_ID},function(err,data){
+			course_ID = data[0].course_id;
+			update_s_duration([-duration , section_ID])
+			update_c_duration([-duration , course_ID])
+			res.json(null);
+		})
+	});
+});
+
+
+module.exports = router;
+
 let update_s_duration = (arr) => {
     return new Promise(
         (resolve) => {
@@ -38,7 +164,6 @@ let update_s_duration = (arr) => {
         	section_id = arr[1];
         	DB.section.findByIdAndUpdate(section_id,{$inc: {duration : s_duration}},function (err, data) 
 			{
-				console.log("s_dur updated")
 				resolve([s_duration]);
     		});
     		
@@ -54,7 +179,6 @@ let update_c_duration = (arr) => {
         	DB.course.findByIdAndUpdate(course_id,{$inc: {duration : c_duration}},function (err, data) 
 			{
 	    		//if (err) return next(err);
-	    		console.log("c_dur updated "+c_duration);
 	    	});
     		
         }
@@ -106,7 +230,6 @@ let add_sections = (sections,course_id) => {
 				//ss.then(update_s_duration)
 				.then(function(arr){
 					c_duration += arr[0];
-					console.log("c_dur "+c_duration + "flag" + flag);
 					count1++;
 					if(count1 == sections.length){
 		        		flag = true;
@@ -128,7 +251,6 @@ let create_lesson = (lesson,section_ID,j,i) => {
     return new Promise(
         (resolve) => {
             var flag=false;
-            console.log(count)
             var l_obj = {
                 name : lesson[j].name,
                 position : j,
@@ -161,10 +283,8 @@ let add_lessons = (lesson,section_ID,i) => {
                 then(function(arr)
                 {
                     s_duration+=arr[0];
-                    console.log(arr[0]);
                     if(arr[1])
                     {
-                    	console.log("added")
                         update_s_duration([s_duration,section_ID]).
                         then(function(arr){
                         	resolve([arr[0]]);
@@ -181,135 +301,3 @@ let add_lessons = (lesson,section_ID,i) => {
         }
     );
 };
-
-router.post('/',function(req,res,next)
-{
-	console.log("hello");
-	var cname = req.body.name;
-	var sections = req.body.sections;
-	var c_obj = {
-		name : cname,
-	    position : 1,
-		duration : 0,
-	}
-	var course_id;
-	DB.course.create(c_obj,function (err, data) 
-	{
-    	if (err) return next(err);
-    	course_id = data._id;
-    	add_sections(sections,course_id)
-    	res.json(null);
-  	});
-});
-
-router.post('/addSection',function(req,res,next)
-{
-	console.log("hello");
-	var sections = req.body.sections;
-	var course_id = req.body.course_id;
-	
-	add_sections(sections,course_id)
-	res.json(null);
-});
-
-
-router.post('/addLesson',function(req,res,next)
-{
-	console.log("hello");
-	var lessons = req.body.lessons;
-	var section_id = req.body.section_id;
-	var course_id;
-	add_lessons(lessons,section_id,0)
-	.then(function(arr){
-		DB.section.findById(section_id,function(err,data){
-			course_id = data.course_id;
-			update_c_duration([arr[0] , course_id])
-		})
-		.catch(err => {
-			console.log(err)
-		});;
-		res.json(null);
-	})
-	.catch(err => {
-		console.log(err)
-	});;
-
-});
-
-router.delete('/delete/:course_id',function(req,res,next)
-{
-	console.log("hello");
-	var course_ID = req.params.course_id;
-	DB.section.find({course_id : course_ID},function(err,data){
-		for(i in data){
-			var section_ID = data[i]._id;
-			DB.lesson.remove({section_id : section_ID},function(err,data){
-
-			})
-			DB.section.remove({_id : section_ID},function(err,data){
-
-			})
-		}
-	})
-	.then(function(){
-		DB.course.remove({_id : course_ID},function(err,data){
-		
-		})
-		res.json(null);
-	});
-});
-
-router.delete('/deleteSection/:section_id',function(req,res,next)
-{
-	console.log("hello");
-	var section_ID = req.params.section_id;
-	var s_duration = 0;
-	DB.lesson.find({section_id : section_ID},function(err,data){
-		console.log(data);
-		for(i in data){
-			s_duration += data[i].duration;
-			DB.lesson.remove({_id : data[i]._id},function(err,data){
-
-			})
-		}
-	})
-	.then(function(){
-		var course_ID;
-		DB.section.find({_id : section_ID},function(err,data){
-			course_ID = data[0].course_id;
-			DB.section.remove({_id : data[0]._id},function(err,data){
-				console.log(course_ID);
-				update_c_duration([-s_duration , course_ID])
-				res.json(null);
-			})
-		})
-		
-	});
-});
-
-router.delete('/deleteLesson/:lesson_id',function(req,res,next)
-{
-	console.log("hello");
-	var lesson_ID = req.params.lesson_id;
-	var section_ID;
-	var duration = 0;
-	DB.lesson.find({_id : lesson_ID},function(err,data){
-		console.log(data);
-		duration = data[0].duration;
-		section_ID = data[0].section_id;
-		DB.lesson.remove({_id : data[0]._id},function(err,data){
-			
-		})
-	})
-	.then(function(){
-		var course_ID;
-		DB.section.find({_id : section_ID},function(err,data){
-			course_ID = data[0].course_id;
-			update_s_duration([-duration , section_ID])
-			update_c_duration([-duration , course_ID])
-			res.json(null);
-		})
-	});
-});
-
-module.exports = router;
