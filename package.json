@@ -1,0 +1,21 @@
+{
+  "name": "crud",
+  "version": "1.0.0",
+  "description": "",
+  "main": "DB.js",
+  "scripts": {
+    "start": "node test.js",
+    "dev": "nodemon test.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "body-parser": "^1.17.2",
+    "express": "^4.15.3",
+    "mongodb": "^2.2.26",
+    "mongoose": "^4.10.2"
+  },
+  "devDependencies": {
+    "nodemon": "^1.11.0"
+  }
+}
